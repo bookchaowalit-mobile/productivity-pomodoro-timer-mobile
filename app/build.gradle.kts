@@ -31,6 +31,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    testOptions {
+        // JVM unit tests (app/src/test) never touch android.* APIs; return
+        // defaults instead of throwing if a stub is ever reached.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -44,4 +50,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     implementation("androidx.navigation:navigation-compose:2.7.7")
+
+    testImplementation("junit:junit:4.13.2")
 }

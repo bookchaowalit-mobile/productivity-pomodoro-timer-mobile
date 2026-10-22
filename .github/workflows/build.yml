@@ -1,19 +1,45 @@
 name: Build
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Toolchain pins: JDK 17 (Temurin) below; Gradle 8.10.2 through the committed
+# wrapper (distributionSha256Sum is checked); AGP 8.2.0 / Kotlin 1.9.20 in
+# build.gradle.kts. Every step is fail-closed: no `|| true` anywhere.
+env:
+  JAVA_VERSION: '17'
+
 jobs:
-  build:
-    name: Android Build
-    runs-on: ubuntu-latest
+  android:
+    name: Android app (JVM unit tests + assembleDebug)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          distribution: 'temurin'
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v3
-      - run: chmod +x gradlew || true
-      - run: ./gradlew assembleDebug || true
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      # Tagged major (not SHA-pinned); also validates the committed wrapper jar.
+      - uses: gradle/actions/setup-gradle@v4
+      # ubuntu-24.04 ships the Android SDK (ANDROID_HOME is preset).
+      - name: Unit tests (ViewModel logic on the JVM)
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+  security:
+    uses: bookchaowalit/platform-ci-workflows/.github/workflows/security.yml@87dc5e1c7e0416886a6371d5a101bb2ccba38edd # v1.1.1
