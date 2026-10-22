@@ -30,9 +30,26 @@ class MoneyViewModel : ViewModel() {
         Category("Other Income", "attach_money", 0xFF95A5A6, TransactionType.INCOME),
     )
 
-    fun addTransaction(amount: Double, category: String, description: String, type: TransactionType) {
-        val tx = Transaction(amount = amount, category = category, description = description, type = type)
+    // Last id handed out. Ids start from the clock (as before) but are strictly
+    // increasing, so two transactions added in the same millisecond never share
+    // an id (deleteTransaction would otherwise remove both).
+    private var lastId = 0L
+
+    private fun nextId(): Long {
+        lastId = maxOf(System.currentTimeMillis(), lastId + 1)
+        return lastId
+    }
+
+    /**
+     * Adds a transaction at the top of the ledger. Amounts must be finite and
+     * greater than zero (the add dialog accepts "0" as text); returns false and
+     * changes nothing otherwise.
+     */
+    fun addTransaction(amount: Double, category: String, description: String, type: TransactionType): Boolean {
+        if (!amount.isFinite() || amount <= 0.0) return false
+        val tx = Transaction(id = nextId(), amount = amount, category = category, description = description, type = type)
         _transactions.value = listOf(tx) + _transactions.value
+        return true
     }
 
     fun deleteTransaction(id: Long) {

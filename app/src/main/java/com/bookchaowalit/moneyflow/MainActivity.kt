@@ -346,8 +346,8 @@ fun AddTransactionDialog(
         confirmButton = {
             TextButton(onClick = {
                 val amt = amount.toDoubleOrNull() ?: return@TextButton
-                viewModel.addTransaction(amt, selectedCategory, description, type)
-                onDismiss()
+                // Keep the dialog open when the amount is rejected (e.g. "0").
+                if (viewModel.addTransaction(amt, selectedCategory, description, type)) onDismiss()
             }) { Text("Save", color = Green, fontWeight = FontWeight.Bold) }
         },
         dismissButton = {
