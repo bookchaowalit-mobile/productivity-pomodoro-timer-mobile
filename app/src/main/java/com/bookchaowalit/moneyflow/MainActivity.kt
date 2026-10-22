@@ -50,9 +50,9 @@ fun MoneyFlowApp(viewModel: MoneyViewModel = viewModel()) {
         containerColor = DarkBg,
         bottomBar = {
             NavigationBar(containerColor = Color(0xFF111827)) {
-                NavigationBarItem(screen == "home", { viewModel.navigateTo("home") }, Icons.Default.Home, "Home")
-                NavigationBarItem(screen == "stats", { viewModel.navigateTo("stats") }, Icons.Default.PieChart, "Stats")
-                NavigationBarItem(screen == "transactions", { viewModel.navigateTo("transactions") }, Icons.Default.List, "History")
+                NavItem(screen == "home", { viewModel.navigateTo("home") }, Icons.Default.Home, "Home")
+                NavItem(screen == "stats", { viewModel.navigateTo("stats") }, Icons.Default.PieChart, "Stats")
+                NavItem(screen == "transactions", { viewModel.navigateTo("transactions") }, Icons.Default.List, "History")
             }
         }
     ) { padding ->
@@ -67,7 +67,7 @@ fun MoneyFlowApp(viewModel: MoneyViewModel = viewModel()) {
 }
 
 @Composable
-fun NavigationBarItem(selected: Boolean, onClick: () -> Unit, icon: ImageVector, label: String) {
+fun RowScope.NavItem(selected: Boolean, onClick: () -> Unit, icon: ImageVector, label: String) {
     NavigationBarItem(
         selected = selected,
         onClick = onClick,
@@ -84,10 +84,11 @@ fun NavigationBarItem(selected: Boolean, onClick: () -> Unit, icon: ImageVector,
 @Composable
 fun HomeScreen(viewModel: MoneyViewModel) {
     val transactions by viewModel.transactions.collectAsState()
-    var showAddDialog by remember { mutableStateOf(false) }
+    // null = closed; otherwise the transaction type the dialog opens with.
+    var addDialogType by remember { mutableStateOf<TransactionType?>(null) }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(ScrollState()).padding(20.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
     ) {
         Spacer(Modifier.height(20.dp))
         Text("MoneyFlow", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -136,8 +137,8 @@ fun HomeScreen(viewModel: MoneyViewModel) {
 
         // Quick Actions
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickActionBtn("Add Expense", Icons.Default.Remove, Red) { showAddDialog = true }
-            QuickActionBtn("Add Income", Icons.Default.Add, Green) { showAddDialog = true }
+            QuickActionBtn("Add Expense", Icons.Default.Remove, Red) { addDialogType = TransactionType.EXPENSE }
+            QuickActionBtn("Add Income", Icons.Default.Add, Green) { addDialogType = TransactionType.INCOME }
         }
 
         Spacer(Modifier.height(24.dp))
@@ -160,11 +161,13 @@ fun HomeScreen(viewModel: MoneyViewModel) {
         Spacer(Modifier.height(100.dp))
     }
 
-    if (showAddDialog) AddTransactionDialog(viewModel) { showAddDialog = false }
+    addDialogType?.let { initialType ->
+        AddTransactionDialog(viewModel, initialType) { addDialogType = null }
+    }
 }
 
 @Composable
-fun QuickActionBtn(label: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
+fun RowScope.QuickActionBtn(label: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
     Card(
         Modifier.weight(1f).clickable(onClick = onClick).height(60.dp),
         shape = RoundedCornerShape(16.dp),
@@ -214,7 +217,7 @@ fun TransactionCard(tx: Transaction, onDelete: () -> Unit = {}) {
 fun StatsScreen(viewModel: MoneyViewModel) {
     val catTotals = viewModel.expensesByCategory()
 
-    Column(Modifier.fillMaxSize().verticalScroll(ScrollState()).padding(20.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(20.dp))
         Text("Spending Stats", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         Spacer(Modifier.height(20.dp))
@@ -244,7 +247,7 @@ fun StatsScreen(viewModel: MoneyViewModel) {
                         Spacer(Modifier.height(8.dp))
                         // Progress bar
                         Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(DarkInput)) {
-                            Box(Modifier.fillMaxWidth(ct.percentage / 100f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(ct.color)))
+                            Box(Modifier.fillMaxWidth((ct.percentage / 100.0).toFloat()).height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(ct.color)))
                         }
                         Spacer(Modifier.height(4.dp))
                         Text("%.1f%% of total".format(ct.percentage), color = TextSecondary, fontSize = 12.sp)
@@ -260,7 +263,7 @@ fun StatsScreen(viewModel: MoneyViewModel) {
 fun TransactionsScreen(viewModel: MoneyViewModel) {
     val transactions by viewModel.transactions.collectAsState()
 
-    Column(Modifier.fillMaxSize().verticalScroll(ScrollState()).padding(20.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Spacer(Modifier.height(20.dp))
         Text("All Transactions", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         Text("${transactions.size} total", color = TextSecondary, fontSize = 14.sp)
@@ -282,14 +285,20 @@ fun TransactionsScreen(viewModel: MoneyViewModel) {
 }
 
 @Composable
-fun AddTransactionDialog(viewModel: MoneyViewModel, onDismiss: () -> Unit = {}) {
+fun AddTransactionDialog(
+    viewModel: MoneyViewModel,
+    initialType: TransactionType = TransactionType.EXPENSE,
+    onDismiss: () -> Unit = {},
+) {
     var amount by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("Food & Drink") }
-    var isExpense by remember { mutableStateOf(true) }
+    var isExpense by remember { mutableStateOf(initialType == TransactionType.EXPENSE) }
 
     val type = if (isExpense) TransactionType.EXPENSE else TransactionType.INCOME
     val cats = viewModel.categories.filter { it.type == type }
+    // Re-pick the category when the type changes, so an income is never saved
+    // under an expense category (and vice versa).
+    var selectedCategory by remember(type) { mutableStateOf(cats.first().name) }
 
     AlertDialog(
         containerColor = DarkCard,
